@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SOVAGO</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+:root{
+  --bg:#090a0c; --panel:#0f1013; --panel-2:#17181c;
+  --text:#f2f2f4; --muted:#a8a8b3; --accent:#b30000;
+  --accent-2:#8a0000; --border:#1e1f25;
+  --ok:#1db954; --warn:#ffb300; --chem:#9b59b6;
+  --azul:#0d7aae;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:radial-gradient(1200px 800px at 30% -10%,#111318 0%,var(--bg) 60%) fixed;color:var(--text);}
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg,#0d0d10 0%,#0b0b0d 100%);
+}
+h1{margin:0;font-size:1.5rem;font-weight:900;letter-spacing:.05em;color:var(--text);}
+h1 span.go{color:var(--azul);}
+main{display:flex;height:calc(100vh - 64px);}
+#map{flex:3;border-right:1px solid var(--border);position:relative;}
+.credit{position:absolute;bottom:8px;left:8px;font-size:12px;color:#a5a5b0;}
+#panel{flex:1;min-width:320px;max-width:520px;background:linear-gradient(180deg,var(--panel) 0%,#0c0c10 100%);padding:12px;overflow:auto;}
+#panel h2{margin:.3rem 0 .6rem;font-size:1rem;letter-spacing:.06em;color:#eaeaf5;}
+ul{list-style:none;margin:0;padding:0;}
+li{background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.tag{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:#0e0e11;color:#d7d7e1;}
+.row{display:flex;gap:8px;}
+button{border:none;border-radius:10px;padding:10px 12px;font-weight:800;cursor:pointer;background:#16171b;color:#fff;border:1px solid var(--border);}
+button.primary{background:linear-gradient(180deg,var(--azul) 0%,#095f82 100%);}
+button.ok{background:linear-gradient(180deg,#1aa34a 0%,#15863c 100%);}
+button.ghost{background:#131318;}
+button:active{transform:translateY(1px);}
+.credits{margin-top:10px;color:#8e8f99;font-size:12px;text-align:center;}
+#clock{color:#b30000;font-weight:900;font-size:14px;}
+#companies{font-size:13px;color:#a8a8b3;margin-top:2px;text-align:right;}
+#announce{position:fixed;top:70px;left:16px;background:rgba(13,122,174,.18);color:#7fd1ff;border:1px solid rgba(13,122,174,.6);padding:6px 10px;border-radius:8px;font-weight:800;backdrop-filter:blur(4px);text-shadow:0 1px 0 rgba(0,0,0,.6);box-shadow:0 4px 14px rgba(0,0,0,.35);z-index:999;display:none;}
+#demoNotice{display:none;position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#002b36;color:#7fd1ff;border:1px solid rgba(13,122,174,.6);padding:6px 10px;border-radius:8px;font-weight:800;z-index:999;}
+.leaflet-container{background:#0a0a0a;}
+.leaflet-control-attribution{display:none;}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>SOVA<span class="go">GO</span></h1>
+  <div style="text-align:right">
+    <div id="clock"></div>
+    <div id="companies"></div>
+  </div>
+</header>
+
+<div id="announce"><small>ANUNCIO</small><span id="announceText"></span></div>
+<div id="demoNotice">🧪 Modo demostración activo — datos simulados</div>
+
+<main>
+  <div id="map">
+    <div class="credit">Desarrollado por FireZoneCL — 2025</div>
+  </div>
+
+  <aside id="panel">
+    <h2>Emergencias</h2>
+    <ul id="emergencyList"></ul>
+    <div class="row">
+      <button id="addEmergency" class="primary">➕ Agregar</button>
+      <button id="closeAll" class="ok">🟢 Cerrar todas</button>
+    </div>
+    <button id="devMode" class="ghost">⚙️ Zona de Desarrolladores</button>
+
+    <div style="margin-top:12px;border-top:1px solid #222;padding-top:10px;">
+      <h3 style="font-size:0.95rem;color:#0d7aae;margin-bottom:6px;">Central Twitter del día</h3>
+      <blockquote class="twitter-timeline" data-theme="dark" data-tweet-limit="3" href="https://twitter.com/Despvaldivia">
+        Tweets by @Despvaldivia
+      </blockquote>
+      <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+    </div>
+
+    <p class="credits">Interfaz azul táctico — tonos grises y negros</p>
+  </aside>
+</main>
+
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+  const clockEl=document.getElementById("clock");
+  const compEl=document.getElementById("companies");
+
+  // Reloj táctico rojo
+  function actualizarReloj(){
+    const ahora=new Date();
+    const dias=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+    const dia=dias[ahora.getDay()];
+    const fecha=ahora.toLocaleDateString("es-CL",{day:"2-digit",month:"long",year:"numeric"});
+    const hora=ahora.toLocaleTimeString("es-CL",{hour12:false});
+    clockEl.textContent=`${hora} — ${dia} ${fecha}`;
+  }
+  setInterval(actualizarReloj,1000); actualizarReloj();
+
+  // Compañías
+  const companiasValdivia=[
+    "1ª Compañía","2ª Compañía","3ª Compañía","4ª Compañía",
+    "5ª Compañía","6ª Compañía","7ª Compañía","8ª Compañía",
+    "9ª Compañía","10ª Compañía"
+  ];
+  compEl.textContent="Compañías en servicio hoy: "+companiasValdivia.join(" • ");
+
+  const beep=new Audio("sounds/beep.mp3");
+  const confirmTone=new Audio("sounds/confirm.mp3");
+  const announce=document.getElementById("announce");
+  const announceText=document.getElementById("announceText");
+  function setAnnouncement(t,s=6){
+    if(!t){announce.style.display="none";return;}
+    announceText.textContent=" "+t;
+    announce.style.display="inline-block";
+    clearTimeout(window.__annTimer);
+    window.__annTimer=setTimeout(()=>announce.style.display="none",s*1000);
+  }
+
+  // Emergencias
+  const list=document.getElementById("emergencyList");
+  let emergencias=[];
+  function colorFor(e){
+    const t=(e.tipo||"").toLowerCase();
+    if(e.estado==="Controlada")return"green";
+    if(t.includes("rescate"))return"yellow";
+    if(t.includes("hazmat")||t.includes("gas")||t.includes("quím"))return"purple";
+    return"red";
+  }
+  function renderList(){
+    list.innerHTML="";
+    emergencias.forEach((e)=>{
+      const li=document.createElement("li");
+      li.innerHTML=`<div><div style="font-weight:800">${e.codigo} — ${e.tipo}</div>
+      <div style="color:var(--muted);font-size:12px">${e.lugar} • <span class="tag">${e.estado}</span></div></div>`;
+      if(e.estado==="Activa"){
+        const b=document.createElement("button");
+        b.textContent="🟢 Cerrar";b.className="ok";
+        b.onclick=()=>{
+          const k=prompt("Clave maestra:");
+          if(k==="Valdivia1932"){e.estado="Controlada";confirmTone.play();renderList();renderMap();}
+          else alert("Clave incorrecta.");
+        };
+        li.appendChild(b);
+      }
+      list.appendChild(li);
+    });
+  }
+
+  // Mapa
+  const map=L.map('map').setView([-39.8145,-73.2459],15);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:20}).addTo(map);
+
+  let markers=[];
+  function addMarker(e){
+    const c=colorFor(e);
+    const m=L.circleMarker([e.lat,e.lng],{radius:9,color:c,fillColor:c,fillOpacity:.85,weight:2})
+      .addTo(map)
+      .bindPopup(`<b>${e.codigo}</b><br>${e.tipo}<br>${e.lugar}<br><b>Estado:</b> ${e.estado}`);
+    return m;
+  }
+  function renderMap(){markers.forEach(m=>map.removeLayer(m));markers=emergencias.map(addMarker);}
+
+  // Click en mapa
+  let tempMarker=null;
+  map.on('click',(ev)=>{
+    if(tempMarker) map.removeLayer(tempMarker);
+    tempMarker=L.marker(ev.latlng).addTo(map).bindPopup("Ubicación seleccionada").openPopup();
+    const k=prompt("Clave maestra para agregar emergencia:");
+    if(k!=="Valdivia1932"){ map.removeLayer(tempMarker); return alert("Clave incorrecta."); }
+    const codigo=prompt("Código (ej:10-0-5):")||"10-0-0";
+    const tipo=prompt("Tipo (Incendio/Rescate/HazMat/Servicio):")||"Incendio estructural";
+    const lugar=prompt("Dirección o referencia:")||"Sin dirección";
+    emergencias.push({codigo,tipo,lugar,estado:"Activa",lat:ev.latlng.lat,lng:ev.latlng.lng});
+    beep.play();renderList();renderMap();
+    setAnnouncement(`Nueva emergencia ${codigo}`,5);
+  });
+
+  // Botones
+  document.getElementById("closeAll").onclick=()=>{
+    const k=prompt("Clave maestra:");
+    if(k!=="Valdivia1932"){alert("Clave incorrecta.");return;}
+    emergencias.forEach(e=>e.estado="Controlada");
+    confirmTone.play();
+    renderList();renderMap();
+    setAnnouncement("Todas las emergencias controladas",6);
+  };
+
+  document.getElementById("devMode").onclick=()=>{
+    const k=prompt("Clave de desarrollador:");
+    if(k!=="SovaGo2025Dev"){alert("Acceso denegado.");return;}
+    const o=prompt("Zona Dev:\n1. Probar sonidos\n2. Modo demostración\n3. Limpiar demo");
+    if(o==="1"){beep.play();setTimeout(()=>confirmTone.play(),800);}
+    if(o==="2"){
+      emergencias=[
+        {codigo:"10-0-5",tipo:"Incendio estructural",lugar:"Picarte 2450",estado:"Activa",lat:-39.816,lng:-73.245},
+        {codigo:"10-3-3",tipo:"Rescate en altura",lugar:"General Lagos 1150",estado:"Activa",lat:-39.815,lng:-73.24},
+        {codigo:"10-5-2",tipo:"HazMat químicos",lugar:"Av. Francia 2200",estado:"Activa",lat:-39.818,lng:-73.25}
+      ];
+      beep.play();renderList();renderMap();
+      document.getElementById("demoNotice").style.display="block";
+      setTimeout(()=>document.getElementById("demoNotice").style.display="none",5000);
+    }
+    if(o==="3"){emergencias=[];renderList();renderMap();}
+  };
+
+  renderList();renderMap();
+});
+</script>
+</body>
+</html>
